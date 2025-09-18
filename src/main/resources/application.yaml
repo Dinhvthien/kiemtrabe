@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: kiemtra
+  datasource:
+    url: jdbc:mysql://localhost:3306/itatkiemtra?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update   # có thể đổi thành 'validate' hoặc 'create-drop' tùy nhu cầu
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+server:
+  port: 8080
+  servlet:
+    context-path: /lms
+
+jwt:
+  signerKey: "1TjXchw5FloESb63Kc+DFhTARvpWL4jUGCwfGWxuG5SIf/1y/LgJxHnMqaF6A/ij"
+  valid-duration: 3600    # in seconds
+  refreshable-duration: 36000 # in seconds
+
+lms:
+  init-data: true
