@@ -26,6 +26,59 @@ import java.util.List;
 public class StudentController {
     StudentService studentService;
     ExamService examService;
+
+    @GetMapping("/{studentId}")
+    public ApiResponse<StudentExamDetailDTO> getStudentExamDetail(@PathVariable Long studentId) {
+        try {
+            StudentExamDetailDTO result = studentService.getStudentExamDetail(studentId);
+
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(200)
+                    .message("Lấy kết quả bài thi của học sinh thành công")
+                    .result(result)
+                    .build();
+
+        } catch (RuntimeException e) {
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(404)
+                    .message(e.getMessage())
+                    .build();
+
+        } catch (Exception e) {
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(500)
+                    .message("Đã xảy ra lỗi khi lấy kết quả bài thi")
+                    .build();
+        }
+    }
+
+    @GetMapping("/{studentId}/exam/{examId}/class/{classId}")
+    public ApiResponse<StudentExamDetailDTO> getStudentExamDetailByExam(
+            @PathVariable Long studentId,
+            @PathVariable Long examId,
+            @PathVariable Long classId) {
+        try {
+            StudentExamDetailDTO result = studentService.getStudentExamDetailByExam(studentId, examId, classId);
+
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(200)
+                    .message("Lấy kết quả bài thi cụ thể thành công")
+                    .result(result)
+                    .build();
+
+        } catch (RuntimeException e) {
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(404)
+                    .message(e.getMessage())
+                    .build();
+
+        } catch (Exception e) {
+            return ApiResponse.<StudentExamDetailDTO>builder()
+                    .code(500)
+                    .message("Đã xảy ra lỗi khi lấy kết quả bài thi")
+                    .build();
+        }
+    }
     @PostMapping("/random-by-class")
     public ApiResponse<ExamResponseDTO> getRandomExamByClass(
             @Valid @RequestBody RandomExamByClassRequest request) {
