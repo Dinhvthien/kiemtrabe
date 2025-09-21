@@ -56,6 +56,7 @@ public class ClassService {
                 .description(classRequest.getDescription())
                 .startDate(classRequest.getStartDate())
                 .endDate(classRequest.getEndDate())
+                .isDeleted(false)
                 .imageUrl(classRequest.getImageUrl())
                 .build();
 
@@ -89,8 +90,7 @@ public class ClassService {
         Sort sort = Sort.by(Sort.Direction.DESC, "classId");
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Class> classPage = classRepository.findBySearch(pageable, search);
-
+        Page<Class> classPage = classRepository.findBySearchAndIsDeletedFalse(pageable, search);
         List<ClassResponse> contentList = classPage.getContent().stream()
                 .map(classEntity -> ClassResponse.builder()
                         .classId(classEntity.getClassId())
@@ -190,12 +190,13 @@ public class ClassService {
     }
 
     // DELETE
-    @Transactional
+     @Transactional
     public void delete(Long id) {
-        if (!classRepository.existsById(id)) {
-            throw new AppException(ErrorCode.CLASS_NOT_FOUND);
-        }
-        classExamRepository.deleteByClassId(id);
-        classRepository.deleteById(id);
+        // Kiểm tra xem bản ghi có tồn tại và chưa bị xóa mềm
+        Class classEntity = classRepository.findByIdAndIsDeletedFalse(id)
+            .orElseThrow(() -> new AppException(ErrorCode.CLASS_NOT_FOUND));
+        // Đặt isDeleted = true
+        classEntity.setIsDeleted(true);
+        classRepository.save(classEntity);
     }
 }

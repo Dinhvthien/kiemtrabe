@@ -15,4 +15,6 @@ public interface StudentExamResultRepository extends JpaRepository<StudentExamRe
     Optional<StudentExamResult> findByStudentIdAndExamId(Long studentId, Long examId);
 
     Optional<Object> findByStudentIdAndClassId(Long studentId, Long classId);
+
+    StudentExamResult findByStudentIdAndExamIdAndClassId(Long studentId, Long examId, Long classId);
 }

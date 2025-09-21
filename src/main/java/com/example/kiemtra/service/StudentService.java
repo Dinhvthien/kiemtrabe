@@ -92,7 +92,7 @@ public class StudentService {
 
         if (search != null && !search.isEmpty()) {
             studentPage = studentRepository
-                    .findByUserNameContainingIgnoreCaseOrPhoneNumberContainingIgnoreCase(search, search, pageable);
+                    .findBySearchAndStatusTrue(pageable, search);
         } else {
             studentPage = studentRepository.findAll(pageable);
         }
@@ -237,27 +237,40 @@ public class StudentService {
     }
     @Transactional
     public ApiResponse<Void> deleteStudent(Long studentId) {
-        if (!studentRepository.existsById(studentId)) {
-            throw new AppException(ErrorCode.STUDENT_NOT_FOUND);
-        }
+        // Kiểm tra xem sinh viên có tồn tại và status = true
+        Student student = studentRepository.findByIdAndStatusTrue(studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.STUDENT_NOT_FOUND));
 
-        // Xóa các StudentClass liên quan trước
-        studentClassRepository.deleteByStudentId(studentId);
-
-        // Xóa sinh viên
-        studentRepository.deleteById(studentId);
+        // Đặt status = false để xóa mềm
+        student.setStatus(false);
+        studentRepository.save(student);
 
         return ApiResponse.<Void>builder()
                 .message("Xóa học sinh thành công")
                 .build();
     }
+    @Transactional
+    public ApiResponse<Void> activeStudent(Long studentId) {
+        // Kiểm tra xem sinh viên có tồn tại và status = true
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.STUDENT_NOT_FOUND));
+
+        // Đặt status = false để xóa mềm
+        student.setStatus(true);
+        studentRepository.save(student);
+
+        return ApiResponse.<Void>builder()
+                .message("Học sinh đã hoạt động")
+                .build();
+    }
     public ApiResponse<StudentDTO> getStudentByPhoneNumber(String phoneNumber) {
-        Optional<Student> studentOpt = studentRepository.findByPhoneNumber(phoneNumber);
-        if (studentOpt.isEmpty()) {
-            throw new AppException(ErrorCode.STUDENT_NOT_FOUND);
+        Student student = studentRepository.findByPhoneNumber(phoneNumber)
+                .orElseThrow(() -> new AppException(ErrorCode.STUDENT_NOT_FOUND));
+
+        if (!student.getStatus()) {
+            throw new AppException(ErrorCode.STUDENT_NOT_ACTIVE);
         }
 
-        Student student = studentOpt.get();
         StudentDTO studentDTO = StudentDTO.builder()
                 .studentId(student.getStudentId())
                 .userName(student.getUserName())
@@ -271,6 +284,7 @@ public class StudentService {
                 .result(studentDTO)
                 .build();
     }
+
 
     public StudentExamDetailDTO getStudentExamDetail(Long studentId) {
         // 1. Lấy thông tin student

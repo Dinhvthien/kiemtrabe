@@ -10,9 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +51,18 @@ public class ExamResultController {
             Workbook workbook = new XSSFWorkbook();
             Sheet sheet = workbook.createSheet("Student Scores");
 
+            // Tạo kiểu cho ô "Đạt" (màu xanh)
+            CellStyle passStyle = workbook.createCellStyle();
+            Font passFont = workbook.createFont();
+            passFont.setColor(IndexedColors.GREEN.getIndex());
+            passStyle.setFont(passFont);
+
+            // Tạo kiểu cho ô "Chưa đạt" (màu đỏ)
+            CellStyle failStyle = workbook.createCellStyle();
+            Font failFont = workbook.createFont();
+            failFont.setColor(IndexedColors.RED.getIndex());
+            failStyle.setFont(failFont);
+
             // Tạo hàng tiêu đề
             Row headerRow = sheet.createRow(0);
             headerRow.createCell(0).setCellValue("STT");
@@ -66,6 +76,7 @@ public class ExamResultController {
             headerRow.createCell(8).setCellValue("Số câu đúng");
             headerRow.createCell(9).setCellValue("Tổng số câu");
             headerRow.createCell(10).setCellValue("Trạng thái");
+            headerRow.createCell(11).setCellValue("Kết quả");
 
             // Điền dữ liệu vào các hàng
             int rowNum = 1;
@@ -89,13 +100,23 @@ public class ExamResultController {
                 row.createCell(7).setCellValue(score.getGrade() != null ? score.getGrade() : "N/A");
                 row.createCell(8).setCellValue(score.getCorrectAnswers() != null ? score.getCorrectAnswers() : 0);
                 row.createCell(9).setCellValue(score.getTotalQuestions() != null ? score.getTotalQuestions() : 0);
-                row.createCell(10).setCellValue(score.getExamStatus());
+                row.createCell(10).setCellValue(score.getExamStatus() != null ? score.getExamStatus() : "N/A");
+
+                // Xử lý cột Kết quả
+                Cell resultCell = row.createCell(11);
+                if (score.getScore() != null && score.getScore() >= 50) {
+                    resultCell.setCellValue("Đạt");
+                    resultCell.setCellStyle(passStyle);
+                } else {
+                    resultCell.setCellValue("Chưa đạt");
+                    resultCell.setCellStyle(failStyle);
+                }
 
                 rowNum++;
             }
 
             // Tự động điều chỉnh kích thước cột
-            for (int i = 0; i < 11; i++) {
+            for (int i = 0; i < 12; i++) {
                 sheet.autoSizeColumn(i);
             }
 
@@ -103,8 +124,6 @@ public class ExamResultController {
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             String fileName = "ket_qua_thi_lop_" + classId + ".xlsx";
             response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-
-            // QUAN TRỌNG: Không gọi response.reset() sau khi đã set header
 
             // Ghi workbook vào output stream
             OutputStream outputStream = response.getOutputStream();

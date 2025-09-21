@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatusCode;
 @Getter
 public enum ErrorCode {
     STUDENT_NOT_FOUND(404, "Học sinh không tồn tại", HttpStatus.NOT_FOUND),
+    STUDENT_NOT_ACTIVE(404, "Bạn cần liên hệ admin để xác minh", HttpStatus.NOT_FOUND),
     CLASS_NOT_FOUND(404, "Lớp học không tồn tại", HttpStatus.NOT_FOUND),
     STUDENT_NOT_ENROLLED_IN_CLASS(400, "Học sinh không đăng ký trong lớp học", HttpStatus.BAD_REQUEST),
     NO_EXAMS_IN_CLASS(404, "Không có bài thi nào trong lớp học", HttpStatus.NOT_FOUND),

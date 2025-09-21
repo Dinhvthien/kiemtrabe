@@ -121,11 +121,14 @@ public class StudentController {
         return studentService.updateStudent(request);
     }
 
-    @DeleteMapping("/{studentId}")
+    @PostMapping("/{studentId}")
     public ApiResponse<Void> deleteStudent(@PathVariable Long studentId) {
         return studentService.deleteStudent(studentId);
     }
-
+    @PostMapping("/active/{studentId}")
+    public ApiResponse<Void> activeStudent(@PathVariable Long studentId) {
+        return studentService.activeStudent(studentId);
+    }
     @GetMapping("/phone/{phoneNumber}")
     public ApiResponse<StudentDTO> getStudentByPhoneNumber(@PathVariable String phoneNumber) {
         return studentService.getStudentByPhoneNumber(phoneNumber);

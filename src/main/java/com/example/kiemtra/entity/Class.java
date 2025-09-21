@@ -23,4 +23,5 @@ public class Class {
     private String endDate;
     @Column(columnDefinition = "TEXT")
     private String imageUrl;
+    private Boolean isDeleted;
 }

@@ -19,4 +19,9 @@ public interface ExamRepository extends JpaRepository<Exam, Long> {
             "(:search IS NULL OR :search = '' OR UPPER(e.title) LIKE UPPER(CONCAT('%', :search, '%')) " +
             "OR UPPER(e.examCode) LIKE UPPER(CONCAT('%', :search, '%')))")
     Page<Exam> findBySearch(Pageable pageable, @Param("search") String search);
+
+    @Query("SELECT e FROM Exam e WHERE e.isDelete = false AND " +
+            "(:search IS NULL OR :search = '' OR UPPER(e.title) LIKE UPPER(CONCAT('%', :search, '%')) " +
+            "OR UPPER(e.examCode) LIKE UPPER(CONCAT('%', :search, '%')))")
+    Page<Exam> findBySearchAndIsDeletedFalse(Pageable pageable, @Param("search") String search);
 }

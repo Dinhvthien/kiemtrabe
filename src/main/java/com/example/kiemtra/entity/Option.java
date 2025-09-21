@@ -17,12 +17,9 @@ public class Option {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long optionId;
-
     private Long questionId;  // chỉ lưu ID
-
     private String optionLabel; // A, B, C, D
     @Column(columnDefinition = "TEXT")
     private String content;
-
     private Boolean isCorrect = false;
 }

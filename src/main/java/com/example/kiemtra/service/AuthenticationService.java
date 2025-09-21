@@ -123,20 +123,30 @@ public class AuthenticationService {
         }
     }
 
-    public AuhthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
-        var signedJWT = verifyToken(request.getToken(), true);
+    public AuhthenticationResponse refreshToken(RefreshRequest request) {
+        try {
+            var signedJWT = verifyToken(request.getToken(), true);
+            log.info("da vao 123");
+            var jit = signedJWT.getJWTClaimsSet().getJWTID();
+            var expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
 
-        var jit = signedJWT.getJWTClaimsSet().getJWTID();
-        var expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+            InvalidatedToken invalidatedToken = InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
 
-        InvalidatedToken invalidatedToken =
-                InvalidatedToken.builder().id(jit).expiryTime(expiryTime).build();
+            invalidatedTokenRepository.save(invalidatedToken);
 
-        invalidatedTokenRepository.save(invalidatedToken);
-        var username = signedJWT.getJWTClaimsSet().getSubject();
-        var user = userRepository.findByUserName(username).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
-        var token = generateToken(user);
-        return AuhthenticationResponse.builder().token(token).build();
+            var username = signedJWT.getJWTClaimsSet().getSubject();
+            var user = userRepository.findByUserName(username)
+                    .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+
+            var token = generateToken(user);
+
+            return AuhthenticationResponse.builder()
+                    .token(token)
+                    .build();
+
+        } catch (ParseException | JOSEException e) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
     }
 
 

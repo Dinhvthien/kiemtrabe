@@ -23,10 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -54,6 +51,7 @@ public class ExamService {
                 .title(examRequest.getTitle())
                 .duration(examRequest.getDuration())
                 .description(examRequest.getDescription())
+                .isDelete(false)
                 .build();
 
         Exam savedExam = examRepository.save(exam);
@@ -70,7 +68,7 @@ public class ExamService {
         Sort sort = Sort.by(Sort.Direction.DESC, "examId");
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Exam> examPage = examRepository.findBySearch(pageable, search);
+        Page<Exam> examPage = examRepository.findBySearchAndIsDeletedFalse(pageable, search);
 
         List<ExamResponse> contentList = examPage.getContent().stream()
                 .map(exam -> ExamResponse.builder()
@@ -133,20 +131,11 @@ public class ExamService {
     }
     @Transactional
     public void delete(Long id) {
-        if (!examRepository.existsById(id)) {
-            throw new AppException(ErrorCode.EXAM_NOT_FOUND);
-        }
-
-        // Xóa thủ công questions và options trước
-        List<Question> questions = questionRepository.findByExamId(id);  // Giả sử có method này trong QuestionRepository
-        for (Question q : questions) {
-            optionRepository.deleteByQuestionId(q.getQuestionId());  // Xóa options của question
-        }
-        questionRepository.deleteByExamId(id);  // Xóa questions
-
-        classExamRepository.deleteByExamId(id);
-        // Sau đó xóa exam
-        examRepository.deleteById(id);
+        Exam exam = examRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.EXAM_NOT_FOUND));
+        // Cập nhật trường isDeleted thành true
+        exam.setIsDelete(true);
+        examRepository.save(exam);
     }
 
     public ExamResponseDTO getRandomExamByClass(
@@ -233,25 +222,12 @@ public class ExamService {
                 .build();
     }
 
-    // Tính số câu trả lời đúng
-    private int calculateCorrectAnswers(List<StudentAnswer> studentAnswers) {
-        int correctCount = 0;
-
-        for (StudentAnswer answer : studentAnswers) {
-            // Kiểm tra xem đáp án học sinh chọn có đúng không
-            Option selectedOption = optionRepository.findById(answer.getOptionId())
-                    .orElse(null);
-
-            if (selectedOption != null && selectedOption.getIsCorrect()) {
-                correctCount++;
-            }
-        }
-
-        return correctCount;
-    }
 
     // Tính xếp loại theo thang điểm 100
-    private String calculateGrade(double score) {
+    private String calculateGrade(Double score) {
+        if (score == null) {
+            return "Chưa thi";
+        }
         if (score >= 90) {
             return "Xuất sắc";
         } else if (score >= 80) {
@@ -259,58 +235,55 @@ public class ExamService {
         } else if (score >= 70) {
             return "Khá";
         } else if (score >= 50) {
-            return "Trung bình";
+            return "Đạt";
         } else {
-            return "Yếu";
+            return "Không đạt";
         }
     }
 
-    // Method chính: Lấy kết quả của tất cả học sinh trong lớp (bao gồm cả chưa thi)
+    // Method chính: Lấy kết quả của tất cả học sinh trong lớp
     public List<StudentExamScoreDTO> getAllStudentScoresInClass(Long classId) {
         List<StudentExamScoreDTO> allResults = new ArrayList<>();
 
         // 1. Lấy thông tin lớp học
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() ->  new AppException(ErrorCode.CLASS_NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.CLASS_NOT_FOUND));
 
-        // 2. Lấy tất cả học sinh trong lớp
+        // 2. Lấy tất cả StudentExamResult theo classId
+        List<StudentExamResult> examResults = studentExamResultRepository.findByClassId(classId);
+
+        // 3. Lấy tất cả sinh viên trong lớp
         List<StudentClass> studentClasses = studentClassRepository.findByClassId(classId);
 
-        // 3. Lấy tất cả kỳ thi của lớp này
-        List<ClassExam> classExams = classExamRepository.findByClassId(classId);
+        // Tạo Set để track sinh viên đã thi (để đối chiếu)
+        Set<Long> studentIdsWithExam = new HashSet<>();
 
-        // 4. Duyệt qua từng học sinh
-        for (StudentClass studentClass : studentClasses) {
-            Student student = studentRepository.findById(studentClass.getStudentId())
+        // 4. Xử lý các sinh viên đã thi (có trong StudentExamResult)
+        for (StudentExamResult examResult : examResults) {
+            Student student = studentRepository.findById(examResult.getStudentId())
                     .orElse(null);
 
-            if (student != null) {
-                // 5. Duyệt qua từng kỳ thi của lớp
-                for (ClassExam classExam : classExams) {
-                    Exam exam = examRepository.findById(classExam.getExamId())
-                            .orElse(null);
+            Exam exam = examRepository.findById(examResult.getExamId())
+                    .orElse(null);
 
-                    if (exam != null) {
-                        // Tạo kết quả cho học sinh này với kỳ thi này
-                        StudentExamScoreDTO scoreDTO = createStudentExamScore(
-                                student, clazz, exam, classId);
-                        allResults.add(scoreDTO);
-                    }
-                }
+            if (student != null && exam != null) {
+                studentIdsWithExam.add(examResult.getStudentId());
 
-                // Nếu lớp chưa có kỳ thi nào, vẫn hiển thị thông tin học sinh
-                if (classExams.isEmpty()) {
-                    StudentExamScoreDTO scoreDTO = StudentExamScoreDTO.builder()
-                            .phoneNumber(student.getPhoneNumber())
-                            .fullName(student.getUserName())
-                            .email(student.getEmail())
-                            .className(clazz.getClassName())
-                            .examName("Chưa có kỳ thi")
-                            .score(null)
-                            .grade("Chưa thi")
-                            .correctAnswers(0)
-                            .totalQuestions(0)
-                            .build();
+                StudentExamScoreDTO scoreDTO = createStudentExamScoreFromResult(
+                        student, clazz, exam, examResult);
+                allResults.add(scoreDTO);
+            }
+        }
+
+        // 5. Xử lý các sinh viên chưa thi (không có trong StudentExamResult)
+        for (StudentClass studentClass : studentClasses) {
+            // Nếu sinh viên này chưa có trong danh sách đã thi
+            if (!studentIdsWithExam.contains(studentClass.getStudentId())) {
+                Student student = studentRepository.findById(studentClass.getStudentId())
+                        .orElse(null);
+
+                if (student != null) {
+                    StudentExamScoreDTO scoreDTO = createStudentExamScoreForNotTaken(student, clazz);
                     allResults.add(scoreDTO);
                 }
             }
@@ -319,111 +292,43 @@ public class ExamService {
         return allResults;
     }
 
-    // Helper method để tạo thông tin điểm cho 1 học sinh với 1 kỳ thi
-    private StudentExamScoreDTO createStudentExamScore(Student student, Class clazz,Exam exam, Long classId) {
-        // Lấy tổng số câu hỏi trong đề thi
-        List<Question> examQuestions = questionRepository.findByExamId(exam.getExamId());
-        int totalQuestions = examQuestions.size();
+    // Helper method: Tạo DTO cho sinh viên đã thi (từ StudentExamResult)
+    private StudentExamScoreDTO createStudentExamScoreFromResult(Student student, Class clazz,
+                                                                 Exam exam, StudentExamResult examResult) {
+        Double score = examResult.getTotalScore() != null ? examResult.getTotalScore().doubleValue() : null;
+        String grade = calculateGrade(score);
 
-        // Lấy câu trả lời của học sinh cho kỳ thi này
-        List<StudentAnswer> studentAnswers = studentAnswerRepository
-                .findByStudentIdAndExamIdAndClassId(
-                        student.getStudentId(), exam.getExamId(), classId);
+        // Lấy thông tin từ StudentExamResult
+        Integer correctAnswers = examResult.getTotalCorrect() != null ? examResult.getTotalCorrect() : 0;
+        Integer totalQuestions = examResult.getTotalQuestions() != null ? examResult.getTotalQuestions() : 0;
 
-        // Kiểm tra xem học sinh đã thi chưa
-        if (studentAnswers.isEmpty()) {
-            // Học sinh chưa thi
-            return StudentExamScoreDTO.builder()
-                    .phoneNumber(student.getPhoneNumber())
-                    .fullName(student.getUserName())
-                    .email(student.getEmail())
-                    .className(clazz.getClassName())
-                    .examName(exam.getTitle())
-                    .score(null)
-                    .grade("Chưa thi")
-                    .correctAnswers(0)
-                    .totalQuestions(totalQuestions)
-                    .build();
-        } else {
-            // Học sinh đã thi - tính điểm
-            int correctAnswers = calculateCorrectAnswers(studentAnswers);
-            double score = totalQuestions > 0 ?
-                    (double) correctAnswers / totalQuestions * 100 : 0;
-            String grade = calculateGrade(score);
-
-            return StudentExamScoreDTO.builder()
-                    .phoneNumber(student.getPhoneNumber())
-                    .fullName(student.getUserName())
-                    .email(student.getEmail())
-                    .className(clazz.getClassName())
-                    .examName(exam.getTitle())
-                    .score(Math.round(score * 10.0) / 10.0)
-                    .grade(grade)
-                    .correctAnswers(correctAnswers)
-                    .totalQuestions(totalQuestions)
-                    .build();
-        }
+        return StudentExamScoreDTO.builder()
+                .phoneNumber(student.getPhoneNumber())
+                .fullName(student.getUserName())
+                .email(student.getEmail())
+                .className(clazz.getClassName())
+                .examName(exam.getTitle()) // Mã đề từ exam
+                .score(score != null ? Math.round(score * 10.0) / 10.0 : null)
+                .grade(grade)
+                .correctAnswers(correctAnswers)
+                .totalQuestions(totalQuestions)
+                .examStatus("Đã thi")
+                .build();
     }
 
-    // Method để lấy kết quả tổng hợp (chỉ những ai đã thi)
-    public List<StudentExamScoreDTO> getCompletedExamScoresInClass(Long classId) {
-        return getAllStudentScoresInClass(classId)
-                .stream()
-                .filter(score -> score.getScore() != null) // Chỉ lấy những ai đã thi
-                .collect(Collectors.toList());
-    }
-
-    // Method để lấy danh sách học sinh chưa thi
-    public List<StudentExamScoreDTO> getNotCompletedExamScoresInClass(Long classId) {
-        return getAllStudentScoresInClass(classId)
-                .stream()
-                .filter(score -> score.getScore() == null) // Chỉ lấy những ai chưa thi
-                .collect(Collectors.toList());
-    }
-
-    // Method để lấy thống kê lớp học
-    public ClassStatisticsDTO getClassStatistics(Long classId) {
-        List<StudentExamScoreDTO> allScores = getAllStudentScoresInClass(classId);
-
-        long totalStudents = allScores.stream()
-                .map(score -> score.getPhoneNumber())
-                .distinct()
-                .count();
-
-        long completedExams = allScores.stream()
-                .filter(score -> score.getScore() != null)
-                .count();
-
-        long notCompletedExams = allScores.stream()
-                .filter(score -> score.getScore() == null)
-                .count();
-
-        // Tính điểm trung bình lớp
-        double averageScore = allScores.stream()
-                .filter(score -> score.getScore() != null)
-                .mapToDouble(StudentExamScoreDTO::getScore)
-                .average()
-                .orElse(0.0);
-
-        // Thống kê theo xếp loại
-        Map<String, Long> gradeDistribution = allScores.stream()
-                .filter(score -> score.getScore() != null)
-                .collect(Collectors.groupingBy(
-                        StudentExamScoreDTO::getGrade,
-                        Collectors.counting()
-                ));
-
-        Class clazz = classRepository.findById(classId).orElse(null);
-        String className = clazz != null ? clazz.getClassName() : "Unknown";
-
-        return ClassStatisticsDTO.builder()
-                .classId(classId)
-                .className(className)
-                .totalStudents((int) totalStudents)
-                .completedExams((int) completedExams)
-                .notCompletedExams((int) notCompletedExams)
-                .averageScore(Math.round(averageScore * 10.0) / 10.0)
-                .gradeDistribution(gradeDistribution)
+    // Helper method: Tạo DTO cho sinh viên chưa thi
+    private StudentExamScoreDTO createStudentExamScoreForNotTaken(Student student, Class clazz) {
+        return StudentExamScoreDTO.builder()
+                .phoneNumber(student.getPhoneNumber())
+                .fullName(student.getUserName())
+                .email(student.getEmail())
+                .className(clazz.getClassName())
+                .examName("Chưa thi")
+                .score(null)
+                .grade("Chưa thi")
+                .correctAnswers(0)
+                .totalQuestions(0)
+                .examStatus("Chưa thi")
                 .build();
     }
 }

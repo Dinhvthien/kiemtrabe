@@ -13,11 +13,13 @@ import java.util.Optional;
 @Repository
 public interface ClassRepository extends JpaRepository<Class, Long> {
     boolean existsByClassCode(String classCode);
-    @Query("SELECT c FROM Class c WHERE " +
+    Optional<Class> findByClassCode(String classCode);
+
+    @Query("SELECT c FROM Class c WHERE c.isDeleted = false AND " +
             "(:search IS NULL OR :search = '' OR UPPER(c.className) LIKE UPPER(CONCAT('%', :search, '%')) " +
             "OR UPPER(c.classCode) LIKE UPPER(CONCAT('%', :search, '%')))")
-    Page<Class> findBySearch(Pageable pageable, @Param("search") String search);
-
-    Optional<Class> findByClassCode(String classCode);
+    Page<Class> findBySearchAndIsDeletedFalse(Pageable pageable, @Param("search") String search);
+    @Query("SELECT c FROM Class c WHERE c.classId = :id AND c.isDeleted = false")
+    Optional<Class> findByIdAndIsDeletedFalse(@Param("id") Long id);
 
 }
